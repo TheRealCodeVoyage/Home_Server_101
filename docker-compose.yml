@@ -1,0 +1,70 @@
+---
+# 1. Create network for Traefik
+services:
+  traefik:
+    image: docker.io/library/traefik:latest
+    container_name: traefik
+    ports:
+      - 80:80
+      - 443:443
+      # - 8080:8080 # Traefik Dashboard
+    volumes:
+      - /run/docker.sock:/run/docker.sock:ro
+      - ./config/:/etc/traefik/:ro
+      - ./certs/:/var/traefik/certs/:rw
+      - ./logs/:/var/log/traefik/:rw
+    environment:
+      - CLOUDFLARE_API_EMAIL=${CLOUDFLARE_API_EMAIL}
+      - CLOUDFLARE_DNS_API_TOKEN=${CLOUDFLARE_DNS_API_TOKEN}
+    networks:
+      - traefik-proxy-network
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true" # Enable Traefik for the service
+      - "traefik.docker.network=traefik-proxy-network"
+      
+      # Traefik HTTP Routers
+      # TODO: Make it Local traefik.local
+      - "traefik.http.routers.traefik-http.rule=Host(`traefik.thevoyagerlab.xyz`)"
+      - "traefik.http.routers.traefik-http.service=api@internal"
+      - "traefik.http.routers.traefik-http.entrypoints=web"
+      
+      # Traefik HTTP -> HTTPS Redirect Middleware
+      - "traefik.http.routers.traefik-http.middlewares=traefik-https-redirect"
+      - "traefik.http.middlewares.traefik-https-redirect.redirectscheme.scheme=https"
+      
+      # Traefik HTTPS Routers
+      - "traefik.http.routers.traefik-https.entrypoints=websecure"
+      - "traefik.http.routers.traefik-https.rule=Host(`traefik.thevoyagerlab.xyz`)"
+      - "traefik.http.routers.traefik-https.tls=true"
+      - "traefik.http.routers.traefik-https.tls.certresolver=cloudflare"
+      - "traefik.http.routers.traefik-https.service=api@internal"
+  
+  ddns-updater:
+    image: qmcgaw/ddns-updater:latest
+    container_name: ddns-updater
+    volumes:
+      - ./data:/updater/data:rw
+    networks:
+      - traefik-proxy-network
+    restart: unless-stopped
+    labels:
+      # Enable Traefik for this container
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-proxy-network"
+
+      # Traefik HTTP Routers
+      - "traefik.http.routers.ddns-updater-http.rule=Host(`ddns.thevoyagerlab.xyz`)"
+      - "traefik.http.routers.ddns-updater-http.service=ddns-updater"
+      - "traefik.http.routers.ddns-updater-http.entrypoints=web"
+
+      # Traefik HTTPS Routers
+      - "traefik.http.routers.ddns-updater-https.entrypoints=websecure"
+      - "traefik.http.routers.ddns-updater-https.rule=Host(`ddns.thevoyagerlab.xyz`)"
+      - "traefik.http.routers.ddns-updater-https.tls=true"
+      - "traefik.http.routers.ddns-updater-https.tls.certresolver=cloudflare"
+      - "traefik.http.services.ddns-updater.loadbalancer.server.port=8000"
+
+networks:
+  traefik-proxy-network:
+    external: true
