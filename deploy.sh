@@ -6,7 +6,7 @@ echo "░   ▒  ▓▐ Updating the system..."
 sudo apt update
 
 echo "░   ▒  ▓▐ Installing dependencies..."
-sudo apt install -y docker.io docker-compose git
+sudo apt install -y docker.io docker-compose apache2-utils
 
 echo "░   ▒  ▓▐ Creating necessary directories..."
 mkdir -p data logs certs config
@@ -71,6 +71,40 @@ EOF
 done
 
 echo '] }' >> $CONFIG_FILE
+
+echo "🔐 Setting up Basic Auth for Traefik"
+
+# Prompt for username (default: admin)
+read -p "👤 Enter username for Traefik Basic Auth [default: admin]: " AUTH_USER
+AUTH_USER=${AUTH_USER:-admin}
+
+# Securely ask for password
+read -s -p "🔑 Enter password for $AUTH_USER: " AUTH_PASS
+echo
+read -s -p "🔁 Confirm password: " AUTH_PASS_CONFIRM
+echo
+
+# Confirm match
+if [ "$AUTH_PASS" != "$AUTH_PASS_CONFIRM" ]; then
+  echo "❌ Passwords do not match. Exiting."
+  exit 1
+fi
+
+# Ensure htpasswd is installed
+if ! command -v htpasswd &> /dev/null; then
+  echo "Installing apache2-utils for htpasswd..."
+  sudo apt install -y apache2-utils
+fi
+
+# Generate and escape hash
+HASHED_LINE=$(echo $(htpasswd -nB "$AUTH_USER" <<< "$AUTH_PASS") | sed -e 's/\\$/\\$\\$/g')
+
+# Replace <<secrets>> in docker-compose.yml
+echo "🛠️ Replacing <<secrets>> with generated credentials in docker-compose.yml..."
+sed -i "s|<<secrets>>|$HASHED_LINE|" docker-compose.yml
+
+echo "✅ Basic Auth successfully configured for user: $AUTH_USER"
+
 
 # Create external docker network (ignore if already exists)
 echo "░   ▒  ▓▐ Creating external Docker network..."
