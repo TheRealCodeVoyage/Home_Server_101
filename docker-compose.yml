@@ -39,9 +39,6 @@ services:
       - "traefik.http.routers.traefik-https.tls=true"
       - "traefik.http.routers.traefik-https.tls.certresolver=cloudflare"
       - "traefik.http.routers.traefik-https.service=api@internal"
-      
-      # Traefik Basic Auth Middleware
-      - "traefik.http.middlewares.test-auth.basicauth.users=<<secrets>>"
 
   ddns-updater:
     image: qmcgaw/ddns-updater:latest
