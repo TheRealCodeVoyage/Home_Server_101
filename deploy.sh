@@ -6,7 +6,7 @@ echo "░   ▒  ▓▐ Updating the system..."
 sudo apt update
 
 echo "░   ▒  ▓▐ Installing dependencies..."
-sudo apt install -y docker.io docker-compose apache2-utils
+sudo apt install -y docker.io docker-compose
 
 echo "░   ▒  ▓▐ Creating necessary directories..."
 mkdir -p data logs certs config

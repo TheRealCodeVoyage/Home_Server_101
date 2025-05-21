@@ -24,7 +24,7 @@ services:
       - "traefik.docker.network=traefik-proxy-network"
       
       # Traefik HTTP Routers
-      # TODO: Make it Local traefik.local
+      # TODO: You can make it Local traefik.local if you are running it on your local machine
       - "traefik.http.routers.traefik-http.rule=Host(`traefik.thevoyagerlab.xyz`)"
       - "traefik.http.routers.traefik-http.service=api@internal"
       - "traefik.http.routers.traefik-http.entrypoints=web"
@@ -39,7 +39,7 @@ services:
       - "traefik.http.routers.traefik-https.tls=true"
       - "traefik.http.routers.traefik-https.tls.certresolver=cloudflare"
       - "traefik.http.routers.traefik-https.service=api@internal"
-
+  
   ddns-updater:
     image: qmcgaw/ddns-updater:latest
     container_name: ddns-updater
