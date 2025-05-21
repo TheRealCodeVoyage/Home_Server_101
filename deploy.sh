@@ -15,15 +15,30 @@ mkdir -p data logs certs config
 read -p "🌐 Enter your Cloudflare API Email: " CF_EMAIL
 read -p "🔑 Enter your Cloudflare DNS API Token: " CF_TOKEN
 read -p "🆔 Enter your Cloudflare Zone ID: " CF_ZONE
-read -p "🏷️  Enter your root domain (e.g., thevoyagerlab.xyz): " ROOT_DOMAIN
-read -p "📛 How many subdomains do you want to configure (e.g., 2 for ddns, traefik)? " SUBDOMAIN_COUNT
+read -p "🌐  Root domain (e.g., thevoyagerlab.xyz): " ROOT_DOMAIN
+read -p "🚀  Traefik sub-domain   [default: traefik]: " TRAEFIK_SUB
+TRAEFIK_SUB=${TRAEFIK_SUB:-traefik}
+read -p "🔄  DDNS sub-domain      [default: ddns]: " DDNS_SUB
+DDNS_SUB=${DDNS_SUB:-ddns}
 
-# Collect subdomain names
-declare -a SUBDOMAINS
-for ((i=1; i<=SUBDOMAIN_COUNT; i++)); do
-  read -p "➡️  Enter subdomain #$i (e.g., ddns): " SUB
-  SUBDOMAINS+=("$SUB")
-done
+TRAEFIK_FQDN="${TRAEFIK_SUB}.${ROOT_DOMAIN}"
+DDNS_FQDN="${DDNS_SUB}.${ROOT_DOMAIN}"
+
+echo "🛠  Updating Host() rules in docker-compose.yml …"
+
+# Traefik routers
+sed -i "s|traefik\.http\.routers\.traefik-http\.rule=Host(\`.*\`)|traefik.http.routers.traefik-http.rule=Host(\`$TRAEFIK_FQDN\`)|" docker-compose.yml
+
+sed -i "s|traefik\.http\.routers\.traefik-https\.rule=Host(\`.*\`)|traefik.http.routers.traefik-https.rule=Host(\`$TRAEFIK_FQDN\`)|" docker-compose.yml
+
+# DDNS rules
+sed -i "s|traefik\.http\.routers\.ddns-updater-http\.rule=Host(\`.*\`)|traefik.http.routers.ddns-updater-http.rule=Host(\`$DDNS_FQDN\`)|" docker-compose.yml
+
+sed -i "s|traefik\.http\.routers\.ddns-updater-https\.rule=Host(\`.*\`)|traefik.http.routers.ddns-updater-https.rule=Host(\`$DDNS_FQDN\`)|" docker-compose.yml
+
+echo "✅  Host rules updated:"
+echo "    • Traefik → ${TRAEFIK_FQDN}"
+echo "    • DDNS    → ${DDNS_FQDN}"
 
 # Create the .env file
 echo "░   ▒  ▓▐ Generating .env file..."
@@ -37,45 +52,42 @@ EOF
 echo "░   ▒  ▓▐ Generating data/config.json file..."
 
 CONFIG_FILE="data/config.json"
-echo '{ "settings": [' > $CONFIG_FILE
 
 # Root domain entry
 cat <<EOF >> $CONFIG_FILE
-  {
+{ "settings": [
+    {
     "provider": "cloudflare",
     "zone_identifier": "$CF_ZONE",
     "domain": "$ROOT_DOMAIN",
     "ttl": 60,
     "token": "$CF_TOKEN",
     "ip_version": "ipv4"
-  },
-EOF
-
-# Subdomains entries
-for index in "${!SUBDOMAINS[@]}"; do
-  SUB="${SUBDOMAINS[$index]}"
-  COMMA=","
-  if [[ "$index" == "$((SUBDOMAIN_COUNT - 1))" ]]; then
-    COMMA=""  # No comma for the last element
-  fi
-  cat <<EOF >> $CONFIG_FILE
-  {
+    },{
     "provider": "cloudflare",
     "zone_identifier": "$CF_ZONE",
-    "domain": "$SUB.$ROOT_DOMAIN",
+    "domain": "${TRAEFIK_FQDN}",
     "ttl": 60,
     "token": "$CF_TOKEN",
     "ip_version": "ipv4"
-  }$COMMA
+    },{
+    "provider": "cloudflare",
+    "zone_identifier": "$CF_ZONE",
+    "domain": "${DDNS_FQDN}",
+    "ttl": 60,
+    "token": "$CF_TOKEN",
+    "ip_version": "ipv4"
+    }
+] }
 EOF
-done
 
-echo '] }' >> $CONFIG_FILE
 
 # Create external docker network (ignore if already exists)
 echo "░   ▒  ▓▐ Creating external Docker network..."
 sudo docker network inspect traefik-proxy-network >/dev/null 2>&1 || \
 sudo docker network create traefik-proxy-network
+
+sleep 1
 
 # Spin up the stack
 echo "░   ▒  ▓▐ Starting Docker stack..."
